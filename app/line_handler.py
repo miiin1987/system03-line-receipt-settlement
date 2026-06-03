@@ -9,7 +9,8 @@ from .models import ExpenseRecord, PendingExpense
 from .ocr import parse_receipt
 from .maps import search_store
 from .ai import classify_category
-from .sheets import save_expense, get_current_month_totals, get_monthly_summary, mark_all_settled
+from .sheets import save_expense, get_current_month_totals, get_monthly_summary, mark_all_settled, get_all_expenses
+from .search import answer_search_query
 from .calculator import format_current_totals, format_monthly_report
 
 logger = logging.getLogger(__name__)
@@ -174,4 +175,11 @@ def handle_text(reply_token: str, user_id: str, text: str):
         _reply(reply_token, msg)
         return
 
-    _reply(reply_token, HELP_TEXT)
+    # コマンド以外はすべて検索クエリとして処理
+    try:
+        expenses = get_all_expenses()
+        answer = answer_search_query(text, expenses)
+    except Exception as e:
+        logger.error(f"Search error: {e}")
+        answer = HELP_TEXT
+    _reply(reply_token, answer)

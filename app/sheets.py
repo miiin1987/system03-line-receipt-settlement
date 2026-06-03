@@ -211,6 +211,42 @@ def get_current_month_totals() -> dict:
     }
 
 
+def get_all_expenses(limit: int = 200) -> list[ExpenseRecord]:
+    service = _get_service()
+    sid = _spreadsheet_id()
+    result = service.spreadsheets().values().get(
+        spreadsheetId=sid, range=f"{SHEET_EXPENSES}!A:O"
+    ).execute()
+    rows = result.get("values", [])[1:]
+
+    expenses = []
+    for r in reversed(rows):  # 新しい順
+        if len(r) < 10:
+            continue
+        try:
+            expenses.append(ExpenseRecord(
+                id=r[0],
+                used_date=datetime.strptime(r[2], "%Y/%m/%d").date(),
+                store_name=r[3],
+                address=r[4] if len(r) > 4 else "",
+                phone=r[5] if len(r) > 5 else "",
+                maps_url=r[6] if len(r) > 6 else "",
+                business_type=r[7] if len(r) > 7 else "",
+                paid_by=r[8] if len(r) > 8 else "",
+                total_amount=int(r[9]),
+                category_major=r[10] if len(r) > 10 else "",
+                category_minor=r[11] if len(r) > 11 else "",
+                memo=r[12] if len(r) > 12 else "",
+                is_split_target=r[13] == "True" if len(r) > 13 else True,
+                is_settled=r[14] == "True" if len(r) > 14 else False,
+            ))
+        except Exception:
+            continue
+        if len(expenses) >= limit:
+            break
+    return expenses
+
+
 def test_connection():
     service = _get_service()
     result = service.spreadsheets().get(spreadsheetId=_spreadsheet_id()).execute()
