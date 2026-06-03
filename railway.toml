@@ -1,0 +1,11 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[[deploy.cronJobs]]
+schedule = "0 23 28-31 * *"
+command = "python -c \"import requests, os; requests.post(os.environ['RAILWAY_PUBLIC_DOMAIN'] + '/cron/monthly-report', headers={'X-Cron-Secret': os.environ.get('CRON_SECRET', '')})\""
