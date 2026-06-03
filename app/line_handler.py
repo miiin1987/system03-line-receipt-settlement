@@ -18,7 +18,8 @@ logger = logging.getLogger(__name__)
 
 # in-memory セッション
 _pending: dict[str, PendingExpense] = {}
-_manual_session: dict[str, dict] = {}  # 手入力Q&Aの状態管理
+_manual_session: dict[str, dict] = {}   # 手入力Q&Aの状態管理
+_edit_session: dict[str, str] = {}      # 修正中のフィールド名
 
 CATEGORIES = [
     "家賃", "食費", "日用品", "趣味娯楽", "交際費",
@@ -225,6 +226,123 @@ def _format_confirmation(expense: ExpenseRecord) -> str:
     )
 
 
+def _show_edit_menu(reply_token: str, user_id: str):
+    """確認画面から「修正」を押したときに修正項目を選ばせる"""
+    qr = QuickReply(items=[
+        QuickReplyItem(action=MessageAction(label="日付を変更", text="日付を変更")),
+        QuickReplyItem(action=MessageAction(label="金額を変更", text="金額を変更")),
+        QuickReplyItem(action=MessageAction(label="カテゴリを変更", text="カテゴリを変更")),
+        QuickReplyItem(action=MessageAction(label="登録をキャンセル", text="登録をキャンセル")),
+    ])
+    _reply(reply_token, "どの項目を修正しますか？", quick_reply=qr)
+
+
+def _handle_edit_step(reply_token: str, user_id: str, text: str):
+    """修正フィールドの入力を処理する"""
+    field = _edit_session.get(user_id)
+
+    # 修正項目の選択
+    if text == "日付を変更":
+        _edit_session[user_id] = "date"
+        qr = QuickReply(items=[
+            QuickReplyItem(action=MessageAction(label="今日", text="今日")),
+            QuickReplyItem(action=MessageAction(label="昨日", text="昨日")),
+            QuickReplyItem(action=MessageAction(label="キャンセル", text="キャンセル")),
+        ])
+        _reply(reply_token, "新しい日付を入力してください。\n例）今日、昨日、6/2", quick_reply=qr)
+        return
+
+    if text == "金額を変更":
+        _edit_session[user_id] = "amount"
+        _reply(reply_token, "新しい金額を入力してください。\n例）4800", quick_reply=_cancel_qr())
+        return
+
+    if text == "カテゴリを変更":
+        _edit_session[user_id] = "category"
+        qr = QuickReply(items=[
+            QuickReplyItem(action=MessageAction(label=cat, text=cat))
+            for cat in CATEGORIES
+        ] + [QuickReplyItem(action=MessageAction(label="キャンセル", text="キャンセル"))])
+        _reply(reply_token, "新しいカテゴリを選んでください。", quick_reply=qr)
+        return
+
+    if text == "登録をキャンセル":
+        _pending.pop(user_id, None)
+        _edit_session.pop(user_id, None)
+        _reply(reply_token, "登録をキャンセルしました。")
+        return
+
+    if text == "キャンセル":
+        _edit_session.pop(user_id, None)
+        # pendingが残っていれば確認画面に戻す
+        pending = _pending.get(user_id)
+        if pending:
+            qr = QuickReply(items=[
+                QuickReplyItem(action=MessageAction(label="志水さん", text="志水さん")),
+                QuickReplyItem(action=MessageAction(label="彼女さん", text="彼女さん")),
+                QuickReplyItem(action=MessageAction(label="修正", text="修正")),
+            ])
+            _reply(reply_token, _format_confirmation(pending.expense), quick_reply=qr)
+        else:
+            _reply(reply_token, "修正をキャンセルしました。")
+        return
+
+    # 値の入力処理
+    pending = _pending.get(user_id)
+    if not pending or not field:
+        _edit_session.pop(user_id, None)
+        return
+
+    if field == "date":
+        new_date = _parse_date(text)
+        if not new_date:
+            _reply(reply_token, "日付の形式が正しくありません。\n例）今日、昨日、6/2", quick_reply=_cancel_qr())
+            return
+        pending.expense.used_date = new_date
+        _edit_session.pop(user_id, None)
+
+    elif field == "amount":
+        new_amount = _parse_amount(text)
+        if not new_amount:
+            _reply(reply_token, "金額は数字で入力してください。\n例）4800", quick_reply=_cancel_qr())
+            return
+        pending.expense.total_amount = new_amount
+        _edit_session.pop(user_id, None)
+
+    elif field == "category":
+        if text not in CATEGORIES:
+            qr = QuickReply(items=[
+                QuickReplyItem(action=MessageAction(label=cat, text=cat))
+                for cat in CATEGORIES
+            ] + [QuickReplyItem(action=MessageAction(label="キャンセル", text="キャンセル"))])
+            _reply(reply_token, "ボタンからカテゴリを選んでください。", quick_reply=qr)
+            return
+        pending.expense.category_major = text
+        if text == "食費":
+            _edit_session[user_id] = "subcategory"
+            qr = QuickReply(items=[
+                QuickReplyItem(action=MessageAction(label="外食", text="外食")),
+                QuickReplyItem(action=MessageAction(label="自炊", text="自炊")),
+                QuickReplyItem(action=MessageAction(label="キャンセル", text="キャンセル")),
+            ])
+            _reply(reply_token, "食費の内訳を選んでください。", quick_reply=qr)
+            return
+        pending.expense.category_minor = ""
+        _edit_session.pop(user_id, None)
+
+    elif field == "subcategory":
+        pending.expense.category_minor = text if text in ("外食", "自炊") else ""
+        _edit_session.pop(user_id, None)
+
+    # 修正完了 → 確認画面に戻す
+    qr = QuickReply(items=[
+        QuickReplyItem(action=MessageAction(label="志水さん", text="志水さん")),
+        QuickReplyItem(action=MessageAction(label="彼女さん", text="彼女さん")),
+        QuickReplyItem(action=MessageAction(label="修正", text="修正")),
+    ])
+    _reply(reply_token, "修正しました。\n\n" + _format_confirmation(pending.expense), quick_reply=qr)
+
+
 def _save_with_payer(reply_token: str, user_id: str, paid_by: str):
     pending = _pending.pop(user_id, None)
     if pending is None:
@@ -289,6 +407,11 @@ def handle_text(reply_token: str, user_id: str, text: str):
         _handle_manual_step(reply_token, user_id, text)
         return
 
+    # 修正フロー中はすべてここで処理
+    if user_id in _edit_session or text in ("日付を変更", "金額を変更", "カテゴリを変更", "登録をキャンセル"):
+        _handle_edit_step(reply_token, user_id, text)
+        return
+
     if text == "志水さん":
         _save_with_payer(reply_token, user_id, "志水")
         return
@@ -298,8 +421,10 @@ def handle_text(reply_token: str, user_id: str, text: str):
         return
 
     if text == "修正":
-        _pending.pop(user_id, None)
-        _reply(reply_token, "キャンセルしました。\nレシートを送るか「手入力」を使ってください。")
+        if user_id in _pending:
+            _show_edit_menu(reply_token, user_id)
+        else:
+            _reply(reply_token, "確認待ちの登録内容がありません。\nレシートを送るか「手入力」を使ってください。")
         return
 
     if text == "手入力":
