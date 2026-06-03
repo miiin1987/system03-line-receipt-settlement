@@ -31,7 +31,7 @@ app = FastAPI(title="LINE家計管理Bot", lifespan=lifespan)
 
 
 def _get_parser() -> WebhookParser:
-    return WebhookParser(os.environ["LINE_CHANNEL_SECRET"])
+    return WebhookParser(os.environ["LINE_CHANNEL_SECRET"].strip())
 
 
 @app.post("/webhook")
@@ -91,7 +91,7 @@ async def cron_monthly_report(
     summary = get_monthly_summary(today.year, today.month)
     report = format_monthly_report(summary)
 
-    config = Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN"])
+    config = Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN"].strip())
     api = MessagingApi(ApiClient(config))
     api.broadcast(BroadcastRequest(messages=[TextMessage(text=report)]))
 

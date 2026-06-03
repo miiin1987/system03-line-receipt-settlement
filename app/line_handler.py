@@ -29,7 +29,7 @@ HELP_TEXT = (
 
 
 def _get_api_client() -> MessagingApi:
-    config = Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN"])
+    config = Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN"].strip())
     return MessagingApi(ApiClient(config))
 
 
@@ -80,7 +80,7 @@ def _save_with_payer(reply_token: str, user_id: str, paid_by: str):
 
 
 def handle_image(reply_token: str, user_id: str, image_url: str):
-    access_token = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
+    access_token = os.environ["LINE_CHANNEL_ACCESS_TOKEN"].strip()
     try:
         ocr_result = parse_receipt(image_url, access_token)
     except Exception as e:
