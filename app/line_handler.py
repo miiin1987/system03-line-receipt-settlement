@@ -9,7 +9,7 @@ from .models import ExpenseRecord, PendingExpense
 from .ocr import parse_receipt
 from .maps import search_store
 from .ai import classify_category
-from .sheets import save_expense, get_current_month_totals, get_monthly_summary, mark_all_settled, get_all_expenses
+from .sheets import save_expense, get_current_month_totals, get_monthly_summary, get_all_expenses
 from .search import answer_search_query
 from .calculator import format_current_totals, format_monthly_report
 
@@ -20,9 +20,9 @@ _pending: dict[str, PendingExpense] = {}
 
 HELP_TEXT = (
     "【使い方】\n\n"
-    "■ レシートを登録する\n"
-    "レシートの写真を撮って送るだけ！\n"
-    "金額・店舗・カテゴリを自動で読み取ります。\n\n"
+    "■ 登録方法\n"
+    "①レシートの写メを送信\n"
+    "②テキストで直接打ち込む\n\n"
     "■ 履歴を検索する\n"
     "テキストで自由に質問を送ってください。\n\n"
     "検索例）\n"
@@ -32,10 +32,9 @@ HELP_TEXT = (
     "・先週使った合計金額教えて\n"
     "・〇〇の電話番号は？\n\n"
     "■ ボタンメニュー\n"
-    "「集計確認」→ 今月の支払い状況\n"
-    "「月次レポート」→ 今月の全集計\n"
-    "「前月集計」→ 先月の全集計\n"
-    "「精算完了」→ 今月を精算済みにする"
+    "「今月の集計」→ 今月の支払い状況\n"
+    "「今月のレポート」→ 今月の全集計\n"
+    "「先月のレポート」→ 先月の全集計"
 )
 
 
@@ -176,17 +175,6 @@ def handle_text(reply_token: str, user_id: str, text: str):
         _reply(reply_token, report)
         return
 
-    if text == "精算完了":
-        today = datetime.now()
-        try:
-            mark_all_settled(today.year, today.month)
-        except Exception as e:
-            logger.error(f"Mark settled error: {e}")
-            _reply(reply_token, "精算処理に失敗しました。")
-            return
-        _reply(reply_token, f"{today.year}年{today.month}月の支出を精算済みにしました。")
-        return
-
     if text == "集計確認":
         try:
             totals = get_current_month_totals()
@@ -196,6 +184,10 @@ def handle_text(reply_token: str, user_id: str, text: str):
             _reply(reply_token, "集計の取得に失敗しました。")
             return
         _reply(reply_token, msg)
+        return
+
+    if text == "使い方":
+        _reply(reply_token, HELP_TEXT)
         return
 
     # コマンド以外はすべて検索クエリとして処理
