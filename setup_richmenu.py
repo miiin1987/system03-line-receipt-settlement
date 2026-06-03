@@ -27,23 +27,27 @@ W2 = MENU_W // 2  # 1250
 H1 = MENU_H // 2  # 421
 H2 = MENU_H - H1  # 422
 
-# 2×2 グリッド
+BG_COLOR  = "#0F172A"  # ダークネイビー背景
+PAD       = 14         # ボタン外縁の余白
+RADIUS    = 28         # 丸角半径
+
+# (x, y, w, h, タイトル, サブテキスト, 送信テキスト, ボタン色)
 BUTTONS = [
-    (0,  0,  W2, H1, "今月の集計",      "集計確認",    "#16213e", "#0f3460"),
-    (W2, 0,  W2, H1, "今月のレポート",   "月次レポート", "#16213e", "#533483"),
-    (0,  H1, W2, H2, "先月のレポート",   "前月集計",    "#16213e", "#1a6b4a"),
-    (W2, H1, W2, H2, "手入力",          "手入力",      "#16213e", "#e94560"),
+    (0,  0,  W2, H1, "今月の集計",    "支払い状況を確認", "集計確認",    "#2563EB"),
+    (W2, 0,  W2, H1, "今月のレポート", "全カテゴリ表示",  "月次レポート", "#7C3AED"),
+    (0,  H1, W2, H2, "先月のレポート", "先月の支出まとめ", "前月集計",    "#0D9488"),
+    (W2, H1, W2, H2, "手入力",        "テキストで登録",   "手入力",      "#DC2626"),
 ]
 
 
 def _load_font(size: int) -> ImageFont.FreeTypeFont:
     candidates = [
+        r"C:\Windows\Fonts\YuGothB.ttc",
         r"C:\Windows\Fonts\meiryo.ttc",
         r"C:\Windows\Fonts\msgothic.ttc",
         r"C:\Windows\Fonts\YuGothM.ttc",
-        r"C:\Windows\Fonts\yugothic.ttf",
         "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc",
-        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
     ]
     for path in candidates:
         try:
@@ -53,27 +57,59 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
+def _hex_to_rgb(h: str) -> tuple:
+    h = h.lstrip("#")
+    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+
+def _lighten(color: str, factor: float = 0.25) -> str:
+    r, g, b = _hex_to_rgb(color)
+    r = int(r + (255 - r) * factor)
+    g = int(g + (255 - g) * factor)
+    b = int(b + (255 - b) * factor)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
 def create_image(path: str = "richmenu.png"):
-    img = Image.new("RGB", (MENU_W, MENU_H), "#1a1a2e")
+    img = Image.new("RGB", (MENU_W, MENU_H), BG_COLOR)
     draw = ImageDraw.Draw(img)
-    font = _load_font(160)
+    font_title = _load_font(130)
+    font_sub   = _load_font(58)
 
-    for x, y, w, h, label, _, bg, accent in BUTTONS:
-        # セル背景
-        draw.rectangle([x + 4, y + 4, x + w - 4, y + h - 4], fill=bg)
-        # アクセントバー（上部）
-        draw.rectangle([x + 4, y + 4, x + w - 4, y + 18], fill=accent)
+    for x, y, w, h, title, subtitle, _, color in BUTTONS:
+        bx0, by0 = x + PAD, y + PAD
+        bx1, by1 = x + w - PAD, y + h - PAD
 
-        # テキスト中央配置
-        cx, cy = x + w // 2, y + h // 2
-        bbox = draw.textbbox((0, 0), label, font=font)
-        tw = bbox[2] - bbox[0]
-        th = bbox[3] - bbox[1]
-        draw.text((cx - tw // 2, cy - th // 2), label, fill="white", font=font)
+        # ボタン本体（丸角）
+        draw.rounded_rectangle([bx0, by0, bx1, by1], radius=RADIUS, fill=color)
 
-    # 2×2 グリッド線
-    draw.line([(W2, 0), (W2, MENU_H)], fill="#2a2a4a", width=6)
-    draw.line([(0, H1), (MENU_W, H1)], fill="#2a2a4a", width=6)
+        # 上部ハイライト（明るいストライプで立体感）
+        hl_h = (by1 - by0) // 3
+        draw.rounded_rectangle(
+            [bx0, by0, bx1, by0 + hl_h],
+            radius=RADIUS,
+            fill=_lighten(color, 0.20),
+        )
+
+        # テキスト垂直中央揃え（タイトル＋サブ）
+        tb = draw.textbbox((0, 0), title, font=font_title)
+        sb = draw.textbbox((0, 0), subtitle, font=font_sub)
+        th, sh = tb[3] - tb[1], sb[3] - sb[1]
+        gap = 20
+        total_h = th + gap + sh
+        cx = (bx0 + bx1) // 2
+        ty = (by0 + by1) // 2 - total_h // 2
+
+        # タイトル
+        draw.text(
+            (cx - (tb[2] - tb[0]) // 2, ty),
+            title, fill="white", font=font_title,
+        )
+        # サブテキスト
+        draw.text(
+            (cx - (sb[2] - sb[0]) // 2, ty + th + gap),
+            subtitle, fill="#CBD5E1", font=font_sub,
+        )
 
     img.save(path)
     print(f"画像を作成しました: {path}")
@@ -89,9 +125,9 @@ def create_richmenu() -> str:
         "areas": [
             {
                 "bounds": {"x": x, "y": y, "width": w, "height": h},
-                "action": {"type": "message", "label": label, "text": text},
+                "action": {"type": "message", "label": title, "text": text},
             }
-            for x, y, w, h, label, text, _, __ in BUTTONS
+            for x, y, w, h, title, subtitle, text, _ in BUTTONS
         ],
     }
     resp = requests.post(
