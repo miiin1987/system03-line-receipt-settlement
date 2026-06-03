@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 _pending: dict[str, PendingExpense] = {}
 
 HELP_TEXT = (
-    "📋 使い方\n\n"
+    "使い方\n\n"
     "【レシート登録】\n"
     "レシートの写真を送ってください\n\n"
     "【コマンド一覧】\n"
@@ -31,11 +31,6 @@ HELP_TEXT = (
 def _get_api_client() -> MessagingApi:
     config = Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN"])
     return MessagingApi(ApiClient(config))
-
-
-def _paid_by_from_user_id(user_id: str) -> str:
-    shimizu_id = os.environ.get("SHIMIZU_USER_ID", "")
-    return "志水" if user_id == shimizu_id else "彼女"
 
 
 def _format_confirmation(expense: ExpenseRecord) -> str:
@@ -56,10 +51,9 @@ def _format_confirmation(expense: ExpenseRecord) -> str:
         f"Maps：\n{maps}\n\n"
         f"カテゴリ：\n{expense.category_major}"
         + (f"（{expense.category_minor}）" if expense.category_minor else "")
-        + f"\n\n支払い者：\n{expense.paid_by}さん\n\n"
-        f"金額：\n{expense.total_amount:,}円\n\n"
+        + f"\n\n金額：\n{expense.total_amount:,}円\n\n"
         f"内容：\n{items_text}\n\n"
-        f"登録しますか？"
+        f"支払い者を選んで登録してください。"
     )
 
 
@@ -67,6 +61,22 @@ def _reply(reply_token: str, text: str, quick_reply: QuickReply | None = None):
     api = _get_api_client()
     msg = TextMessage(text=text, quick_reply=quick_reply)
     api.reply_message(ReplyMessageRequest(reply_token=reply_token, messages=[msg]))
+
+
+def _save_with_payer(reply_token: str, user_id: str, paid_by: str):
+    pending = _pending.pop(user_id, None)
+    if pending is None:
+        _reply(reply_token, "確認待ちの登録内容がありません。\nまずレシートを送ってください。")
+        return
+    pending.expense.paid_by = paid_by
+    try:
+        save_expense(pending.expense)
+    except Exception as e:
+        logger.error(f"Sheets save error: {e}")
+        _reply(reply_token, "保存中にエラーが発生しました。もう一度お試しください。")
+        return
+    totals = get_current_month_totals()
+    _reply(reply_token, "登録しました。\n\n" + format_current_totals(totals))
 
 
 def handle_image(reply_token: str, user_id: str, image_url: str):
@@ -95,7 +105,7 @@ def handle_image(reply_token: str, user_id: str, image_url: str):
         phone=store_info.get("phone", ""),
         maps_url=store_info.get("maps_url", ""),
         business_type=store_info.get("business_type", ""),
-        paid_by=_paid_by_from_user_id(user_id),
+        paid_by="",
         total_amount=ocr_result["total_amount"],
         category_major=category["category_major"],
         category_minor=category["category_minor"],
@@ -106,31 +116,23 @@ def handle_image(reply_token: str, user_id: str, image_url: str):
         user_id=user_id, expense=expense, created_at=datetime.now()
     )
 
-    confirm_text = _format_confirmation(expense)
     qr = QuickReply(items=[
-        QuickReplyItem(action=MessageAction(label="はい", text="はい")),
+        QuickReplyItem(action=MessageAction(label="志水さん", text="志水さん")),
+        QuickReplyItem(action=MessageAction(label="彼女さん", text="彼女さん")),
         QuickReplyItem(action=MessageAction(label="修正", text="修正")),
     ])
-    _reply(reply_token, confirm_text, quick_reply=qr)
+    _reply(reply_token, _format_confirmation(expense), quick_reply=qr)
 
 
 def handle_text(reply_token: str, user_id: str, text: str):
     text = text.strip()
 
-    if text == "はい":
-        pending = _pending.pop(user_id, None)
-        if pending is None:
-            _reply(reply_token, "確認待ちの登録内容がありません。\nまずレシートを送ってください。")
-            return
-        try:
-            save_expense(pending.expense)
-        except Exception as e:
-            logger.error(f"Sheets save error: {e}")
-            _reply(reply_token, "保存中にエラーが発生しました。もう一度お試しください。")
-            return
-        totals = get_current_month_totals()
-        summary = "登録しました。\n\n" + format_current_totals(totals)
-        _reply(reply_token, summary)
+    if text == "志水さん":
+        _save_with_payer(reply_token, user_id, "志水")
+        return
+
+    if text == "彼女さん":
+        _save_with_payer(reply_token, user_id, "彼女")
         return
 
     if text == "修正":
