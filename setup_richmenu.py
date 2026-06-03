@@ -23,11 +23,19 @@ HEADERS_JSON = {
 MENU_W = 2500
 MENU_H = 843
 
+W3 = MENU_W // 3        # 833
+W3R = MENU_W - W3 * 2  # 834（端数調整）
+W2 = MENU_W // 2       # 1250
+H1 = MENU_H // 2       # 421
+H2 = MENU_H - H1       # 422
+
+# 上段3列 / 下段2列
 BUTTONS = [
-    (0,          0,          MENU_W // 2, MENU_H // 2, "集計確認",    "集計確認",    "#16213e", "#0f3460"),
-    (MENU_W // 2, 0,         MENU_W // 2, MENU_H // 2, "月次レポート", "月次レポート", "#16213e", "#533483"),
-    (0,          MENU_H // 2, MENU_W // 2, MENU_H // 2, "精算完了",   "精算完了",    "#16213e", "#e94560"),
-    (MENU_W // 2, MENU_H // 2, MENU_W // 2, MENU_H // 2, "使い方",   "使い方",      "#16213e", "#0f3460"),
+    (0,       0,  W3,  H1, "集計確認",    "集計確認",    "#16213e", "#0f3460"),
+    (W3,      0,  W3,  H1, "月次レポート", "月次レポート", "#16213e", "#533483"),
+    (W3 * 2,  0,  W3R, H1, "前月集計",    "前月集計",    "#16213e", "#1a6b4a"),
+    (0,       H1, W2,  H2, "精算完了",    "精算完了",    "#16213e", "#e94560"),
+    (W2,      H1, W2,  H2, "使い方",      "使い方",      "#16213e", "#0f3460"),
 ]
 
 
@@ -66,9 +74,13 @@ def create_image(path: str = "richmenu.png"):
         th = bbox[3] - bbox[1]
         draw.text((cx - tw // 2, cy - th // 2), label, fill="white", font=font)
 
-    # グリッド線
-    draw.line([(MENU_W // 2, 0), (MENU_W // 2, MENU_H)], fill="#2a2a4a", width=6)
-    draw.line([(0, MENU_H // 2), (MENU_W, MENU_H // 2)], fill="#2a2a4a", width=6)
+    # 横区切り線（上段・下段）
+    draw.line([(0, H1), (MENU_W, H1)], fill="#2a2a4a", width=6)
+    # 上段の縦区切り線（3列）
+    draw.line([(W3, 0), (W3, H1)], fill="#2a2a4a", width=6)
+    draw.line([(W3 * 2, 0), (W3 * 2, H1)], fill="#2a2a4a", width=6)
+    # 下段の縦区切り線（2列）
+    draw.line([(W2, H1), (W2, MENU_H)], fill="#2a2a4a", width=6)
 
     img.save(path)
     print(f"画像を作成しました: {path}")

@@ -81,7 +81,7 @@ async def cron_monthly_report(
     if today.day != last_day:
         return {"status": "skipped", "reason": "not last day of month"}
 
-    from .sheets import get_monthly_summary
+    from .sheets import get_monthly_summary, mark_all_settled
     from .calculator import format_monthly_report
     from linebot.v3.messaging import (
         ApiClient, Configuration, MessagingApi,
@@ -91,9 +91,11 @@ async def cron_monthly_report(
     summary = get_monthly_summary(today.year, today.month)
     report = format_monthly_report(summary)
 
+    # 月次レポートを送信してから精算済みにマーク
     config = Configuration(access_token=os.environ["LINE_CHANNEL_ACCESS_TOKEN"].strip())
     api = MessagingApi(ApiClient(config))
     api.broadcast(BroadcastRequest(messages=[TextMessage(text=report)]))
+    mark_all_settled(today.year, today.month)
 
     return {"status": "sent"}
 

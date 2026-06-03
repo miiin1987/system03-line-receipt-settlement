@@ -22,16 +22,19 @@ HELP_TEXT = (
     "【使い方】\n\n"
     "■ レシートを登録する\n"
     "レシートの写真を撮って送るだけ！\n"
-    "自動で金額・店舗・カテゴリを読み取ります。\n\n"
-    "■ 過去の履歴を調べる\n"
-    "テキストで自由に質問してください。\n\n"
-    "例）\n"
-    "・先月行ったラーメン屋どこ？\n"
+    "金額・店舗・カテゴリを自動で読み取ります。\n\n"
+    "■ 履歴を検索する\n"
+    "テキストで自由に質問を送ってください。\n\n"
+    "検索例）\n"
+    "・先月行ったカラオケどこだっけ？\n"
     "・今月の食費いくら？\n"
-    "・先週使った金額教えて\n\n"
+    "・最近行ったラーメン屋一覧\n"
+    "・先週使った合計金額教えて\n"
+    "・〇〇の電話番号は？\n\n"
     "■ ボタンメニュー\n"
     "「集計確認」→ 今月の支払い状況\n"
     "「月次レポート」→ 今月の全集計\n"
+    "「前月集計」→ 先月の全集計\n"
     "「精算完了」→ 今月を精算済みにする"
 )
 
@@ -146,6 +149,19 @@ def handle_text(reply_token: str, user_id: str, text: str):
     if text == "修正":
         _pending.pop(user_id, None)
         _reply(reply_token, "キャンセルしました。\nもう一度レシートを送ってください。")
+        return
+
+    if text == "前月集計":
+        today = datetime.now()
+        prev_year, prev_month = (today.year, today.month - 1) if today.month > 1 else (today.year - 1, 12)
+        try:
+            summary = get_monthly_summary(prev_year, prev_month)
+            report = f"【{prev_year}年{prev_month}月の集計】\n\n" + format_monthly_report(summary)
+        except Exception as e:
+            logger.error(f"Prev month report error: {e}")
+            _reply(reply_token, "前月集計の取得に失敗しました。")
+            return
+        _reply(reply_token, report)
         return
 
     if text == "月次レポート":
