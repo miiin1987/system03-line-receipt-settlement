@@ -115,13 +115,10 @@ def upload_image(rich_menu_id: str, image_path: str):
 
 
 def set_default(rich_menu_id: str):
+    # 全ユーザーにリッチメニューを紐付ける
     resp = requests.post(
-        f"https://api.line.me/v2/bot/richmenu/default",
-        headers={
-            "Authorization": f"Bearer {ACCESS_TOKEN}",
-            "Content-Type": "application/json",
-        },
-        json={"richMenuId": rich_menu_id},
+        f"https://api.line.me/v2/bot/user/all/richmenu/{rich_menu_id}",
+        headers={"Authorization": f"Bearer {ACCESS_TOKEN}"},
     )
     resp.raise_for_status()
     print("デフォルトメニューに設定しました")
